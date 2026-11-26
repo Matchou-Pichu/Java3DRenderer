@@ -15,6 +15,14 @@ class Vertex {
         this.z = z;
     }
 
+    public static double VdotV(Vertex v1, Vertex v2){
+        return v1.getX() * v2.getX() + v1.getY() * v2.getY() + v1.getZ() * v2.getZ();
+    }
+
+    public double ComputeNorm(){
+        return Math.sqrt(this.getX() * this.getX() + this.getY() * this.getY() + this.getZ() * this.getZ());
+    }
+
     public double getX(){
         return this.x;
     }
@@ -85,6 +93,13 @@ class Matrix3 {
 }
 
 public class DemoViewer {
+
+    public static Color getShade(Color color, double shade) {
+        int red = (int) (color.getRed() * shade);
+        int green = (int) (color.getGreen() * shade);
+        int blue = (int) (color.getBlue() * shade);
+        return new Color(red, green, blue);
+    }
     
     public static void main(String[] args) {
 
@@ -157,21 +172,41 @@ public class DemoViewer {
                     zBuffer[z] = Double.NEGATIVE_INFINITY;
                 }
 
+                Vertex light = new Vertex(0, 0, 1);
+                double lightNorm = light.ComputeNorm();
+
                 for(Triangle t : tris){
 
                     // We are not using GPU rasterization  so we can't
                     // use graph2D anymore and have to do it manually.
 
                     Vertex v1 = transform.transform(t.getV1());
+                    Vertex v2 = transform.transform(t.getV2());
+                    Vertex v3 = transform.transform(t.getV3());
+
                     v1.x += getWidth() /2;
                     v1.y += getHeight()/2;
-                    Vertex v2 = transform.transform(t.getV2());
                     v2.x += getWidth()/2;
                     v2.y += getHeight()/2;
-                    Vertex v3 = transform.transform(t.getV3());
                     v3.x += getWidth()/2;
                     v3.y += getHeight()/2;
 
+                    Vertex ab = new Vertex(v2.x - v1.x, v2.y - v1.y, v2.z - v1.z);
+                    Vertex ac = new Vertex(v3.x - v1.x, v3.y - v1.y, v3.z - v1.z);
+
+                    Vertex norm = new Vertex(
+                                            ab.getX() * ac.getZ() - ab.getX() * ac.getY(), 
+                                            ab.getZ() * ac.getX() - ab.getX() * ac.getZ(),
+                                            ab.getX() * ac.getY() - ab.getY() * ac.getX()
+                    );
+
+                    double normalNorm = norm.ComputeNorm();
+
+                    norm.x /= normalNorm;
+                    norm.y /= normalNorm;
+                    norm.z /= normalNorm;
+                    
+                    double angleCos = Vertex.VdotV(norm, light) / (normalNorm * lightNorm);
 
                     // Retangular bounds for triangle  adn colorization
                     int minX = (int) Math.max(0, Math.ceil(Math.min(v1.x, Math.min(v2.x, v3.x))));
@@ -195,14 +230,13 @@ public class DemoViewer {
                                 double depth = b1 * v1.getZ() + b2 * v2.getZ() + b3 * v3.getZ();
                                 int zInd = y * img.getWidth() + x;
                                 if (zBuffer[zInd] < depth){
-                                    img.setRGB(x, y, t.color.getRGB());
+                                    img.setRGB(x, y, getShade(t.getColor(), angleCos).getRGB());
                                     zBuffer[zInd] = depth;
                                 }
                             }
                             
                         }
                     }
-
 
                     // Drawing the wireframe
                     Path2D path = new Path2D.Double();
